@@ -111,12 +111,12 @@ class FeatureEngineer(BaseEstimator, TransformerMixin):
                 X[col] = pd.to_numeric(X[col], errors="coerce")
                 X[col] = X[col].fillna(0).astype(int)
         
-        if self.mode == ["base", "medium", "full"]:
+        if self.mode in ["base", "medium", "full"]:
             for col, med in self.numeric_medians.items():
                 if col in X.columns:
                     X[col] = pd.to_numeric(X[col], errors="coerce")
                     X[col] = X[col].fillna(med)
-                    
+
         if self.mode in ["medium", "full"]:
             X['mark'] = X['name'].str.split(' ').str[0]
             X['model'] = X['name'].str.split(' ').str[1]
