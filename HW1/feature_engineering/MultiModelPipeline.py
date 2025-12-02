@@ -47,6 +47,18 @@ class FeatureEngineer(BaseEstimator, TransformerMixin):
             "Dynamic", "Premium", "Exclusive", "Base", "Plus", "Optional"
         }
 
+        self.numeric_medians = {
+            "year": 2014,
+            "selling_price": 405000.0,
+            "km_driven": 70000,
+            "engine": 1248,
+            "seats": 5,
+            "mileage": 19.37,
+            "max_power": 81.86,
+            "torque": 160.0,
+            "max_torque_rpm": 3000.0
+        }
+
     def fit(self, X, y=None):
 
         return self
@@ -90,9 +102,21 @@ class FeatureEngineer(BaseEstimator, TransformerMixin):
 
         X.drop(columns=['torque_numbers', 'torque_words', 'torque_clean'], inplace=True)
 
-        X['engine'] = X['engine'].astype(int)
-        X['seats'] = X['seats'].astype(int)
-
+        if self.mode == "EDA":
+            numeric_int_cols = ["year", "km_driven", "seats", "engine", "max_torque_rpm"]
+            numeric_float_cols = ["mileage", "max_power", "torque"]
+            for col in numeric_float_cols:
+                X[col] = pd.to_numeric(X[col], errors="coerce")
+            for col in numeric_int_cols:
+                X[col] = pd.to_numeric(X[col], errors="coerce")
+                X[col] = X[col].fillna(0).astype(int)
+        
+        if self.mode == ["base", "medium", "full"]:
+            for col, med in self.numeric_medians.items():
+                if col in X.columns:
+                    X[col] = pd.to_numeric(X[col], errors="coerce")
+                    X[col] = X[col].fillna(med)
+                    
         if self.mode in ["medium", "full"]:
             X['mark'] = X['name'].str.split(' ').str[0]
             X['model'] = X['name'].str.split(' ').str[1]
