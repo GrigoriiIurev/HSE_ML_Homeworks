@@ -22,4 +22,4 @@
    **`streamlit_app/`** - папка с рабочим веб-приложением
 
 5. Feature Engineering для Streamlit:
-   **`feature_engineering/`** - папка с классом **`FeatureEngineer`**, используемым Streamlit-приложением
+   **`feature_engineering/`** - папка с классом **`MultiModelPipeline`**, используемым Streamlit-приложением
