@@ -7,6 +7,8 @@ import os
 import sys
 import plotly.express as px
 import phik
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+import seaborn as sns
 
 base_dir = os.path.dirname(__file__)
 parent_dir = os.path.abspath(os.path.join(base_dir, "..", "feature_engineering"))
@@ -197,6 +199,60 @@ st.plotly_chart(fig, use_container_width=True)
 
 st.header("2. Моделирование")
 
+input_mode = st.radio(
+    "Способ ввода данных:",
+    ["Загрузить CSV", "Ввести данные вручную"]
+)
+
+if input_mode == "Загрузить CSV":
+    uploaded_pred = st.file_uploader("Загрузите CSV для моделирования", type=["csv"], key="model")
+
+    if uploaded_pred:
+        df_pred = pd.read_csv(uploaded_pred)
+        process_data = True
+    else:
+        process_data = False
+else:
+    process_data = False
+
+if input_mode == "Ввести данные вручную":
+    with st.form("manual_input"):
+        st.subheader("📝 Введите данные автомобиля")
+
+        name = st.text_input("Name", "Maruti Swift Dzire VDI")
+        year = st.number_input("Year", min_value=1980, max_value=2025, value=2014)
+        km_driven = st.number_input("km_driven", min_value=0, max_value=5000000, value=70000)
+        fuel = st.selectbox("Fuel", ["Petrol", "Diesel", "CNG", "LPG"])
+        seller_type = st.selectbox("Seller Type", ["Individual", "Dealer", "Trustmark Dealer"])
+        transmission = st.selectbox("Transmission", ["Manual", "Automatic"])
+        owner = st.selectbox("Owner", ['First Owner', 'Second Owner', 'Third Owner',
+                                        'Fourth & Above Owner', 'Test Drive Car'])
+        mileage = st.text_input("Mileage", "18.0 kmpl")
+        engine = st.text_input("Engine", "1248 CC")
+        max_power = st.text_input("Max Power", "82 bhp")
+        torque = st.text_input("Torque", "113 Nm @ 4500 rpm")
+        seats = st.number_input("Seats", min_value=2, max_value=10, value=5)
+
+        submitted = st.form_submit_button("Предсказать")
+
+    if submitted:
+        df_pred = pd.DataFrame([{
+            "name": name,
+            "year": year,
+            "km_driven": km_driven,
+            "fuel": fuel,
+            "seller_type": seller_type,
+            "transmission": transmission,
+            "owner": owner,
+            "mileage": mileage,
+            "engine": engine,
+            "max_power": max_power,
+            "torque": torque,
+            "seats": seats
+        }])
+
+        process_data = True
+
 model_name = st.selectbox(
     "Выберите модель:",
     [
@@ -223,17 +279,15 @@ MODEL_MAP = {
 model_key = MODEL_MAP[model_name]
 model_obj = load_model(model_key)
 
-model          = model_obj["model"]
-scaler         = model_obj.get("scaler")
-encoder        = model_obj.get("encoder")
-feature_order  = model_obj["feature_order"]
-num_cols       = model_obj.get("num_cols")
-ohe_cols       = model_obj.get("ohe_cols")
-is_log_target  = model_obj.get("target_log", False)
+model = model_obj["model"]
+scaler = model_obj.get("scaler")
+encoder = model_obj.get("encoder")
+feature_order = model_obj["feature_order"]
+num_cols = model_obj.get("num_cols")
+ohe_cols = model_obj.get("ohe_cols")
+is_log_target = model_obj.get("target_log", False)
 
-uploaded_pred = st.file_uploader("Загрузите CSV для моделирования", type=["csv"], key="model")
-if uploaded_pred:
-    df_pred = pd.read_csv(uploaded_pred)
+if process_data:
     if model_key in ["linear_raw", "linear_scaled", "lasso_simple", "lasso_grid", "elasticnet_grid"]:
         fe_pred = FeatureEngineer(mode="base")
     elif model_key == "ridge_grid":
@@ -242,44 +296,93 @@ if uploaded_pred:
         fe_pred = FeatureEngineer(mode="full")
 
     df_pred_fe = fe_pred.transform(df_pred)
-    st.write(f"{num_cols}")
-    st.dataframe(df_pred_fe.head())
     if encoder is None:
         X = df_pred_fe[feature_order].copy()
         if scaler is not None:
             X[num_cols] = scaler.transform(X[num_cols])
+
     else:
         numeric_part = df_pred_fe[num_cols]
-        cat_part     = df_pred_fe[ohe_cols]
+        cat_part     = df_pred_fe[ohe_cols].astype(str)
+
         if scaler is not None:
             numeric_scaled = scaler.transform(numeric_part)
             numeric_scaled = pd.DataFrame(numeric_scaled, columns=num_cols)
         else:
             numeric_scaled = numeric_part.copy()
+
         ohe_encoded = encoder.transform(cat_part)
         ohe_cols_final = encoder.get_feature_names_out(ohe_cols)
         ohe_encoded = pd.DataFrame(ohe_encoded, columns=ohe_cols_final)
 
         X = pd.concat([numeric_scaled, ohe_encoded], axis=1)
-
         X = X[feature_order]
 
-    st.dataframe(X.head())
     y_pred = model.predict(X)
-
     if is_log_target:
         y_pred = np.exp(y_pred)
 
-    st.subheader("🔮 Предсказания")
+    st.subheader("Предсказания")
     result = df_pred.copy()
     result["predicted_price"] = y_pred
-
     st.dataframe(result.head())
 
-    csv = result.to_csv(index=False).encode("utf-8")
-    st.download_button(
-        "📥 Скачать результат",
-        csv,
-        file_name="predictions.csv",
-        mime="text/csv",
-    )
+    true_col_candidates = ["selling_price", "price", "y", "target"]
+    true_col = next((c for c in true_col_candidates if c in df_pred.columns), None)
+
+    if true_col is not None:
+        y_true = df_pred[true_col].values
+        y_pred_corrected = result["predicted_price"].values
+
+        mae = mean_absolute_error(y_true, y_pred_corrected)
+        mse = mean_squared_error(y_true, y_pred_corrected)
+        rmse = np.sqrt(mse)
+        r2 = r2_score(y_true, y_pred_corrected)
+
+        st.subheader("Метрики модели")
+        st.markdown(f"""
+        **MSE:** {mse:,.2f}  
+        **RMSE:** {rmse:,.2f}  
+        **R2:** {r2:.4f}
+        """)
+    else:
+        st.info("В данных нет настоящей цены и метрики не посчитать.")
+
+if hasattr(model, "coef_"):
+    st.subheader("Веса модели")
+
+    coef = np.asarray(model.coef_).ravel()
+    if len(coef) != len(feature_order):
+        st.warning(
+            f"Размерность coef_ ({len(coef)}) не совпадает с количеством признаков "
+            f"feature_order ({len(feature_order)})."
+        )
+    else:
+        coef_df = pd.DataFrame({
+            "feature": feature_order,
+            "weight": coef
+        })
+
+        coef_df = coef_df.sort_values("weight", ascending=False)
+
+        height = max(6, 0.15 * len(coef_df))
+
+        fig, ax = plt.subplots(figsize=(8, height))
+
+        sns.barplot(
+            data=coef_df,
+            y="feature",
+            x="weight",
+            order=coef_df["feature"],
+            orient="h",
+            ax=ax
+        )
+
+        ax.set_title("Веса линейной модели)")
+        ax.set_xlabel("коэффициент")
+        ax.set_ylabel("признак")
+
+        plt.tight_layout()
+        st.pyplot(fig)
+
+        st.dataframe(coef_df)
