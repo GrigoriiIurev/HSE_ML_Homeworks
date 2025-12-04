@@ -328,6 +328,10 @@ log_price = log1p(selling_price)
 
 Streamlit помог это найти, я поправил логику сохранения pkl и после этого все модели в приложении стали работать корректно. Надеюсь, что это не сильно повлияет на оценивание первой части.
 
+## 6) Ссылка на Streamlit Cloud
+
+https://hsemlhomeworks-dy7vukaps2nrjzrcxckmy7.streamlit.app
+
 
 
 
