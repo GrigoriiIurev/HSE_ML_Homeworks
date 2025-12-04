@@ -341,7 +341,7 @@ if process_data:
 
         st.subheader("Метрики модели")
         st.markdown(f"""
-        **MSE:** {mse:,.2f}  
+        **MAE:** {mae:,.2f}  
         **RMSE:** {rmse:,.2f}  
         **R2:** {r2:.4f}
         """)
